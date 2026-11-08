@@ -1,0 +1,50 @@
+name: cross-repo cache
+
+# Restores the vcpkg binary cache artifacts of johnwason/github-actions-scratch (a producer in
+# another repository) with this repository's own GITHUB_TOKEN.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  consume:
+    runs-on: ${{ matrix.config.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { runner: ubuntu-24.04, triplet: x64-linux, os: Linux }
+          - { runner: windows-2022, triplet: x64-windows, os: Windows }
+          - { runner: macos-15, triplet: arm64-osx, os: macOS }
+    steps:
+    - uses: actions/checkout@v6
+    - name: raw API access with this repository's GITHUB_TOKEN
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        R=johnwason/github-actions-scratch
+        N=vcpkg-cache-${{ matrix.config.os }}-${{ matrix.config.triplet }}-experiment
+        echo "list runs:      $(gh api "repos/$R/actions/workflows/vcpkg-cache.yml/runs?branch=vcpkg-artifact-cache&per_page=1" --jq '.total_count' 2>&1)"
+        id=$(gh api "repos/$R/actions/artifacts?name=$N&per_page=1" --jq '.artifacts[0].id' 2>&1)
+        echo "list artifacts: $id"
+        code=$(curl -s -o /dev/null -w '%{http_code}' -L -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$R/actions/artifacts/$id/zip")
+        echo "download zip:   HTTP $code"
+    - uses: johnwason/github-actions-scratch/vcpkg-action@vcpkg-artifact-cache
+      id: vcpkg
+      with:
+        pkgs-file: test/packages.txt
+        triplet: ${{ matrix.config.triplet }}
+        revision: '2026.10.16'
+        cache-key: experiment
+        token: ${{ github.token }}
+        artifact-cache-workflow: vcpkg-cache.yml
+        artifact-cache-branch: vcpkg-artifact-cache
+        artifact-cache-repository: johnwason/github-actions-scratch
+    - name: report
+      shell: bash
+      run: echo "## ${{ matrix.config.triplet }}: artifact found ${{ steps.vcpkg.outputs.artifact-cache-found }}" >> "$GITHUB_STEP_SUMMARY"
