@@ -47,4 +47,5 @@ jobs:
         artifact-cache-repository: johnwason/github-actions-scratch
     - name: report
       shell: bash
-      run: echo "## ${{ matrix.config.triplet }}: artifact found ${{ steps.vcpkg.outputs.artifact-cache-found }}" >> "$GITHUB_STEP_SUMMARY"
+      run: |
+        echo "## ${{ matrix.config.triplet }}: artifact found ${{ steps.vcpkg.outputs.artifact-cache-found }}" >> "$GITHUB_STEP_SUMMARY"
